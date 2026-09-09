@@ -1,7 +1,6 @@
 import asyncio
 import os
 import random
-import sys
 import time
 from contextlib import asynccontextmanager
 
@@ -14,24 +13,19 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ------------------- المتغيرات الأساسية -------------------
+# ---------- المتغيرات من البيئة ----------
 API_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
 ADMIN_HANDLE = os.getenv("ADMIN_HANDLE", "@YUGO_DZ")
-SERVER_IP = os.getenv("SERVER_IP", "0.0.0.0")
 PORT = int(os.getenv("PORT", 10000))
 
-MIN_BET = 500000
-COOLDOWN_SECONDS = 10
-CHALLENGE_TIMEOUT = 180
-
 if not API_TOKEN or not ADMIN_ID:
-    raise ValueError("يجب تعيين BOT_TOKEN و ADMIN_ID في ملف .env")
+    raise ValueError("BOT_TOKEN و ADMIN_ID مطلوبان في متغيرات البيئة")
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
-# ------------------- قاعدة البيانات غير المتزامنة -------------------
+# ---------- قاعدة البيانات غير المتزامنة ----------
 DB_PATH = "casino_stats.db"
 
 @asynccontextmanager
@@ -96,11 +90,14 @@ async def register_user_if_new(user: types.User):
             """, (user.id, user.username or "", user.full_name))
             await db.commit()
 
-# ------------------- التحديات النشطة -------------------
+# ---------- التحديات النشطة ----------
 active_challenges = {}
 user_last_cmd_time = {}
+COOLDOWN_SECONDS = 10
+MIN_BET = 500000
+CHALLENGE_TIMEOUT = 180
 
-# ------------------- الأوامر الأساسية -------------------
+# ---------- الأوامر ----------
 @dp.message(Command("start", "help"))
 async def help_cmd(message: types.Message):
     if await is_user_banned(message.from_user.id):
@@ -138,7 +135,6 @@ async def admin_panel(message: types.Message):
         total_volume = (await total_volume.fetchone())[0] or 0
         banned_count = await db.execute("SELECT COUNT(*) FROM users WHERE is_banned = 1")
         banned_count = (await banned_count.fetchone())[0]
-
     bank_profit = int(total_volume * 0.05)
     text = (
         f"⚙️ **لوحة الأدمن | DIPCASINO**\n"
@@ -206,7 +202,7 @@ async def unban_cmd(message: types.Message):
         await db.commit()
     await message.reply(f"✅ تم فك الحظر عن `{target}`.")
 
-# ------------------- منطق التحدي -------------------
+# ---------- منطق التحدي (مختصر) ----------
 async def auto_cancel(challenge_id, chat_id, message_id):
     await asyncio.sleep(CHALLENGE_TIMEOUT)
     if challenge_id in active_challenges:
@@ -250,7 +246,6 @@ async def dice_challenge(message: types.Message):
         return
 
     user_last_cmd_time[user.id] = now
-
     challenge_id = f"{message.chat.id}_{message.message_id}"
     active_challenges[challenge_id] = {
         "p1_id": user.id,
@@ -503,7 +498,7 @@ async def start_dice_roll(msg: types.Message, challenge_id: str, attempt: int = 
         await asyncio.sleep(1.5)
         await start_dice_roll(msg, challenge_id, attempt + 1)
 
-# ------------------- الإحصائيات -------------------
+# ---------- الإحصائيات ----------
 @dp.message(Command("top"))
 async def top_cmd(message: types.Message):
     if await is_user_banned(message.from_user.id):
@@ -547,7 +542,7 @@ async def stats_cmd(message: types.Message):
     )
     await message.reply(text, parse_mode="Markdown")
 
-# ------------------- سيرفر الويب -------------------
+# ---------- سيرفر الويب ----------
 async def handle_ping(request):
     return web.Response(text="Bot is alive!")
 
@@ -556,13 +551,13 @@ async def start_dummy_server():
     app.router.add_get("/", handle_ping)
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, SERVER_IP, PORT)
+    site = web.TCPSite(runner, "0.0.0.0", PORT)
     await site.start()
-    print(f"✅ السيرفر يعمل على {SERVER_IP}:{PORT}")
+    print(f"✅ السيرفر يعمل على المنفذ {PORT}")
 
-# ------------------- التشغيل -------------------
+# ---------- التشغيل ----------
 async def main():
-    print(f"🟢 DIPCASINO يعمل مع إشعار الأدمن المباشر (IP: {SERVER_IP}, PORT: {PORT})")
+    print("🟢 DIPCASINO يعمل مع إشعار الأدمن المباشر...")
     await start_dummy_server()
     await dp.start_polling(bot)
 
