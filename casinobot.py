@@ -15,7 +15,7 @@ sys.stdout.reconfigure(encoding='utf-8')
 # --- الإعدادات الأساسية ---
 API_TOKEN = "8987676069:AAHAKyeUghOdsfJZWBnO7CflLr-u9ovzXrY"
 ADMIN_HANDLE = "@YUGO_DZ"
-ADMIN_ID = 677447724  # تم تحديث الآيدي الخاص بك بنجاح
+ADMIN_ID = 677447724  # الآيدي الخاص بك
 MIN_BET = 500000
 COOLDOWN_SECONDS = 10
 
@@ -26,7 +26,6 @@ dp = Dispatcher()
 conn = sqlite3.connect("casino_stats.db")
 cursor = conn.cursor()
 
-# جدول المستخدمين الإحصائي
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS users (
     user_id INTEGER PRIMARY KEY,
@@ -109,7 +108,7 @@ active_challenges = {}
 user_last_cmd_time = {}
 
 
-# --- الأوامر والترحيب ---
+# --- 📜 الترحيب والأوامر ---
 @dp.message(Command("start", "help"))
 async def help_cmd(message: types.Message):
   if is_user_banned(message.from_user.id):
@@ -119,22 +118,27 @@ async def help_cmd(message: types.Message):
   register_user_if_new(message.from_user)
 
   text = (
-      f"🎲 **DIPCASINO | كازينو النرد الذكي** 🎲\n"
+      f"🎲 **مرحباً بك في DIPCASINO** 🎲\n"
       f"━━━━━━━━━━━━━━━━━━━\n"
-      f"اختر رقمك واترك البوت يحسم الجولة بمطابقة رقمك تماماً!\n\n"
-      f"📜 **القوانين:**\n"
-      f"• الحد الأدنى للرهان: `{MIN_BET:,}` عملة.\n"
-      f"• عمولة البنك: **5%** تُقتطع من الفائز.\n"
-      f"• الضامن والوسيط: {ADMIN_HANDLE}\n\n"
-      f"🎮 **الأوامر:**\n"
-      f"🔹 `/dice [المبلغ]` — إنشاء تحدي اختيار أرقام.\n"
-      f"🔹 `/top` — لوحة المتصدرين.\n"
-      f"🔹 `/stats` — إحصائياتك الشخصية."
+      f"اختر الرهان المناسب لك وابدأ التحدي فوراً:\n\n"
+      f"🔹 `/dice 500000` — رهان 500 ألف عملة\n"
+      f"🔹 `/dice 1000000` — رهان 1 مليون عملة\n"
+      f"🔹 `/dice 1500000` — رهان 1.5 مليون عملة\n"
+      f"🔹 `/dice 2000000` — رهان 2 مليون عملة\n"
+      f"🔹 `/dice 5000000` — رهان 5 ملايين عملة\n\n"
+      f"━━━━━━━━━━━━━━━━━━━\n"
+      f"📜 **قوانين وتنبيهات:**\n"
+      f"• يجب تحويل المبلغ للوسيط {ADMIN_HANDLE} قبل بدء التحدي.\n"
+      f"• لن تبدأ اللعبة إلا بعد ضغط {ADMIN_HANDLE} على زر التأكيد.\n"
+      f"• عمولة البنك: **5%** من المبلغ الإجمالي للجائزة.\n\n"
+      f"📊 **أوامر الحساب:**\n"
+      f"• `/top` — لوحة المتصدرين\n"
+      f"• `/stats` — إحصائياتك الشخصية"
   )
   await message.reply(text, parse_mode="Markdown")
 
 
-# --- ⚙️ لوحة تحكم الأدمن ---
+# --- ⚙️ لوحة الأدمن ---
 @dp.message(Command("admin"))
 async def admin_panel(message: types.Message):
   if message.from_user.id != ADMIN_ID:
@@ -183,7 +187,6 @@ async def broadcast_cmd(message: types.Message):
 
   success = 0
   failed = 0
-
   msg = await message.reply("🔄 **جارٍ إرسال الإذاعة...**")
 
   for (u_id,) in users:
@@ -212,9 +215,7 @@ async def ban_cmd(message: types.Message):
 
   args = message.text.split()
   if len(args) < 2 or not args[1].isdigit():
-    await message.reply(
-        "⚠️ استخدم الأمر هكذا: `/ban 123456789`", parse_mode="Markdown"
-    )
+    await message.reply("⚠️ استخدم الأمر هكذا: `/ban 123456789`")
     return
 
   target_id = int(args[1])
@@ -235,9 +236,7 @@ async def unban_cmd(message: types.Message):
 
   args = message.text.split()
   if len(args) < 2 or not args[1].isdigit():
-    await message.reply(
-        "⚠️ استخدم الأمر هكذا: `/unban 123456789`", parse_mode="Markdown"
-    )
+    await message.reply("⚠️ استخدم الأمر هكذا: `/unban 123456789`")
     return
 
   target_id = int(args[1])
@@ -250,7 +249,7 @@ async def unban_cmd(message: types.Message):
   )
 
 
-# --- مؤقت إلغاء التحدي المعلق تلقائياً ---
+# --- إلغاء تلقائي للتحدي المعلق ---
 async def auto_cancel_challenge(
     chat_id: int, message_id: int, challenge_id: str
 ):
@@ -261,7 +260,7 @@ async def auto_cancel_challenge(
       await bot.edit_message_text(
           chat_id=chat_id,
           message_id=message_id,
-          text="⏰ **تم إلغاء التحدي تلقائياً بسبب عدم انضمام منافس خلال 3 دقائق.**",
+          text="⏰ **تم إلغاء التحدي تلقائياً بسبب عدم اكتماله خلال 3 دقائق.**",
       )
     except Exception:
       pass
@@ -270,98 +269,104 @@ async def auto_cancel_challenge(
 # --- 1. إنشاء التحدي ---
 @dp.message(Command("dice"))
 async def dice_challenge(message: types.Message):
-  user_id = message.from_user.id
+  try:
+    user_id = message.from_user.id
 
-  if is_user_banned(user_id):
-    await message.reply("❌ أنت محظور من استخدام البوت.")
-    return
+    if is_user_banned(user_id):
+      await message.reply("❌ أنت محظور من استخدام البوت.")
+      return
 
-  register_user_if_new(message.from_user)
-  now = time.time()
+    register_user_if_new(message.from_user)
+    now = time.time()
 
-  if user_id in user_last_cmd_time:
-    elapsed = now - user_last_cmd_time[user_id]
-    if elapsed < COOLDOWN_SECONDS:
-      remaining = int(COOLDOWN_SECONDS - elapsed)
+    if user_id in user_last_cmd_time:
+      elapsed = now - user_last_cmd_time[user_id]
+      if elapsed < COOLDOWN_SECONDS:
+        remaining = int(COOLDOWN_SECONDS - elapsed)
+        await message.reply(
+            f"⏳ **مهلاً!** يرجى الانتظار `{remaining}` ثوانٍ قبل إنشاء تحدٍّ جديد.",
+            parse_mode="Markdown",
+        )
+        return
+
+    for ch_id, ch_data in active_challenges.items():
+      if ch_data["p1_id"] == user_id:
+        await message.reply(
+            "⚠️ **لديك تحدٍّ قائم بالفعل!** قم بإلغائه أو انتظره حتى ينتهي.",
+            parse_mode="Markdown",
+        )
+        return
+
+    args = message.text.split()
+    if len(args) < 2 or not args[1].isdigit():
       await message.reply(
-          f"⏳ **مهلاً!** يرجى الانتظار `{remaining}` ثوانٍ قبل إنشاء تحدٍّ جديد.",
+          f"❌ **التنسيق غير صحيح!**\nارسل الأمر هكذا:\n`/dice {MIN_BET}`",
           parse_mode="Markdown",
       )
       return
 
-  for ch_id, ch_data in active_challenges.items():
-    if ch_data["p1_id"] == user_id:
+    bet = int(args[1])
+    if bet < MIN_BET:
       await message.reply(
-          "⚠️ **لديك تحدٍّ قائم بالفعل!** قم بإلغائه أو انتظره حتى ينتهي.",
+          f"⚠️ **الحد الأدنى للرهان هو `{MIN_BET:,}` عملة.**",
           parse_mode="Markdown",
       )
       return
 
-  args = message.text.split()
-  if len(args) < 2 or not args[1].isdigit():
-    await message.reply(
-        f"❌ **التنسيق غير صحيح!**\nارسل الأمر هكذا:\n`/dice {MIN_BET}`",
+    user_last_cmd_time[user_id] = now
+    challenger = message.from_user
+    challenge_id = f"{message.chat.id}_{message.message_id}"
+
+    active_challenges[challenge_id] = {
+        "p1_id": challenger.id,
+        "p1_name": challenger.full_name,
+        "p1_username": challenger.username or "",
+        "p1_choice": None,
+        "p2_id": None,
+        "p2_name": None,
+        "p2_username": None,
+        "p2_choice": None,
+        "bet": bet,
+    }
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=f"⚔️ دخول التحدي ({bet:,} عملة)",
+                    callback_data=f"join_{challenge_id}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="❌ إلغاء التحدي",
+                    callback_data=f"cancel_{challenge_id}",
+                )
+            ],
+        ]
+    )
+
+    sent_msg = await message.reply(
+        f"🎲 **تحدي المطابقة الذكي!**\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 **المتحدي:** {challenger.full_name}\n"
+        f"💰 **الرهان المطلوب:** `{bet:,}` عملة لكل لاعب\n"
+        f"🏆 **الجائزة الصافية:** `{int(bet * 2 * 0.95):,}` عملة\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"📌 اضغط على الزر أدناه للانضمام!",
+        reply_markup=keyboard,
         parse_mode="Markdown",
     )
-    return
 
-  bet = int(args[1])
-  if bet < MIN_BET:
-    await message.reply(
-        f"⚠️ **الحد الأدنى للرهان هو `{MIN_BET:,}` عملة.**", parse_mode="Markdown"
+    asyncio.create_task(
+        auto_cancel_challenge(
+            message.chat.id, sent_msg.message_id, challenge_id
+        )
     )
-    return
 
-  user_last_cmd_time[user_id] = now
-  challenger = message.from_user
-  challenge_id = f"{message.chat.id}_{message.message_id}"
-
-  active_challenges[challenge_id] = {
-      "p1_id": challenger.id,
-      "p1_name": challenger.full_name,
-      "p1_username": challenger.username or "",
-      "p1_choice": None,
-      "p2_id": None,
-      "p2_name": None,
-      "p2_username": None,
-      "p2_choice": None,
-      "bet": bet,
-  }
-
-  keyboard = InlineKeyboardMarkup(
-      inline_keyboard=[
-          [
-              InlineKeyboardButton(
-                  text=f"⚔️ دخول التحدي ({bet:,} عملة)",
-                  callback_data=f"join_{challenge_id}",
-              )
-          ],
-          [
-              InlineKeyboardButton(
-                  text="❌ إلغاء التحدي", callback_data=f"cancel_{challenge_id}"
-              )
-          ],
-      ]
-  )
-
-  sent_msg = await message.reply(
-      f"🎲 **تحدي المطابقة الذكي!**\n"
-      f"━━━━━━━━━━━━━━━━━━━\n"
-      f"👤 **المتحدي:** {challenger.full_name}\n"
-      f"💰 **الرهان:** `{bet:,}` عملة\n"
-      f"🏆 **الجائزة الصافية:** `{int(bet * 2 * 0.95):,}` عملة\n"
-      f"🎯 **الشرط:** المطابقة التامة لرقم النرد!\n"
-      f"━━━━━━━━━━━━━━━━━━━\n"
-      f"اضغط على الزر للانضمام واختيار الرقم!",
-      reply_markup=keyboard,
-      parse_mode="Markdown",
-  )
-
-  asyncio.create_task(
-      auto_cancel_challenge(
-          message.chat.id, sent_msg.message_id, challenge_id
-      )
-  )
+  except Exception as e:
+    print(f"خطأ في dice: {e}")
+    await message.reply("⚠️ حدث خطأ أثناء تنفيذ الأمر، حاول مجدداً.")
 
 
 # --- إلغاء التحدي ---
@@ -369,7 +374,10 @@ async def dice_challenge(message: types.Message):
 async def cancel_challenge(callback: types.CallbackQuery):
   challenge_id = callback.data.replace("cancel_", "")
   if challenge_id in active_challenges:
-    if callback.from_user.id == active_challenges[challenge_id]["p1_id"]:
+    if (
+        callback.from_user.id == active_challenges[challenge_id]["p1_id"]
+        or callback.from_user.id == ADMIN_ID
+    ):
       del active_challenges[challenge_id]
       await callback.message.edit_text("🚫 **تم إلغاء التحدي.**")
     else:
@@ -416,17 +424,17 @@ async def join_challenge(callback: types.CallbackQuery):
   keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 
   await callback.message.edit_text(
-      f"🎮 **اختر رقمك المتوقع (1-6):**\n"
+      f"🎮 **اختيار الأرقام:**\n"
       f"━━━━━━━━━━━━━━━━━━━\n"
       f"👤 **{game['p1_name']}:** لم يسيطر بعد\n"
       f"👤 **{game['p2_name']}:** لم يسيطر بعد\n\n"
-      f"⚠️ يجب على كل لاعب اختيار رقم مختلف عن الآخر!",
+      f"🎯 يرجى من كل لاعب اختيار رقم مختلف عن خصمه!",
       reply_markup=keyboard,
       parse_mode="Markdown",
   )
 
 
-# --- 3. اختيار الأرقام ---
+# --- 3. اختيار الأرقام والانتظار لقفل الإدارة ---
 @dp.callback_query(F.data.startswith("num_"))
 async def select_number(callback: types.CallbackQuery):
   _, challenge_id, num_str = callback.data.split("_")
@@ -463,11 +471,53 @@ async def select_number(callback: types.CallbackQuery):
     game["p2_choice"] = num
     await callback.answer(f"✅ تم اختيار الرقم {num}")
 
+  # إذا اختار الطرفان أرقامهما، تظهر رسالة انتظار استلام المال مع زر الأدمن الخاص بك
   if game["p1_choice"] is not None and game["p2_choice"] is not None:
-    await start_dice_roll(callback.message, challenge_id)
+    admin_keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[[
+            InlineKeyboardButton(
+                text="✅ تأكيد استلام المال وبدء اللعبة",
+                callback_data=f"startgame_{challenge_id}",
+            )
+        ]]
+    )
+
+    await callback.message.edit_text(
+        f"⏳ **تم اختيار الأرقام بنجاح!**\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 **{game['p1_name']}:** اختار الرقم `{game['p1_choice']}`\n"
+        f"👤 **{game['p2_name']}:** اختار الرقم `{game['p2_choice']}`\n"
+        f"💰 **الرهان المطلوبة لكل لاعب:** `{game['bet']:,}` عملة\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"⚠️ **تنبيه للاعبين:** أرسلوا الأموال إلى الوسيط {ADMIN_HANDLE}.\n"
+        f"نشاط اللعبة متوقف حالياً وفي انتظار اضغط {ADMIN_HANDLE} على زر تأكيد الإيداع لبدء الرمي!",
+        reply_markup=admin_keyboard,
+        parse_mode="Markdown",
+    )
 
 
-# --- 4. خوارزمية الرمي الذكية والتنفيذ ---
+# --- 4. تأكيد الأدمن وبدء اللعبة تلقائياً ---
+@dp.callback_query(F.data.startswith("startgame_"))
+async def start_game_by_admin(callback: types.CallbackQuery):
+  challenge_id = callback.data.replace("startgame_", "")
+
+  if challenge_id not in active_challenges:
+    await callback.answer("⚠️ التحدي غير موجود أو انتهى!", show_alert=True)
+    return
+
+  # التأكد أن الضغطة من طرفك أنت فقط كـ ADMIN
+  if callback.from_user.id != ADMIN_ID:
+    await callback.answer(
+        f"❌ هذا الزر مخصص فقط للوسيط {ADMIN_HANDLE} بعد تحويل المال!",
+        show_alert=True,
+    )
+    return
+
+  await callback.answer("✅ تم تأكيد استلام الأموال! جارٍ إطلاق اللعبة...")
+  await start_dice_roll(callback.message, challenge_id)
+
+
+# --- 5. خوارزمية الرمي والتنفيذ ---
 async def start_dice_roll(
     message: types.Message, challenge_id: str, attempt: int = 1
 ):
@@ -475,7 +525,6 @@ async def start_dice_roll(
     return
 
   game = active_challenges[challenge_id]
-
   p1_name = game["p1_name"]
   p2_name = game["p2_name"]
   c1 = game["p1_choice"]
@@ -484,7 +533,7 @@ async def start_dice_roll(
 
   if attempt == 1:
     await message.edit_text(
-        f"🔥 **تم اختيار الأرقام!**\n"
+        f"🔥 **تم استلام الأموال وبدء التحدي!**\n"
         f"━━━━━━━━━━━━━━━━━━━\n"
         f"🎯 **توقع {p1_name}:** الرقم `{c1}`\n"
         f"🎯 **توقع {p2_name}:** الرقم `{c2}`\n\n"
@@ -602,7 +651,7 @@ async def stats_cmd(message: types.Message):
 
 # --- سيرفر Render ---
 async def handle_ping(request):
-  return web.Response(text="Admin Panel Enabled Dice Bot Running!")
+  return web.Response(text="Bot with Admin Approval system is Active!")
 
 
 async def start_dummy_server():
@@ -616,7 +665,7 @@ async def start_dummy_server():
 
 
 async def main():
-  print("🟢 البوت يعمل ومربوط بالآيدي الخاص بك الآن...")
+  print("🟢 البوت يعمل بالنظام الجديد (تأكيد الأدمن)...")
   await start_dummy_server()
   await dp.start_polling(bot)
 
