@@ -12,18 +12,18 @@ from aiohttp import web
 from aiosqlite import connect
 from dotenv import load_dotenv
 
-load_dotenv()  # تحميل المتغيرات من .env
+load_dotenv()
 
 # ------------------- المتغيرات الأساسية -------------------
 API_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_ID = int(os.getenv("ADMIN_ID", 0))          # معرف الأدمن (رئيسي)
-ADMIN_HANDLE = os.getenv("ADMIN_HANDLE", "@YUGO_DZ")  # يمكن تركه افتراضي
-SERVER_IP = os.getenv("SERVER_IP", "0.0.0.0")     # عنوان IP للسيرفر (افتراضي 0.0.0.0)
-PORT = int(os.getenv("PORT", 10000))              # المنفذ (افتراضي 10000)
+ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
+ADMIN_HANDLE = os.getenv("ADMIN_HANDLE", "@YUGO_DZ")
+SERVER_IP = os.getenv("SERVER_IP", "0.0.0.0")
+PORT = int(os.getenv("PORT", 10000))
 
 MIN_BET = 500000
 COOLDOWN_SECONDS = 10
-CHALLENGE_TIMEOUT = 180  # 3 دقائق
+CHALLENGE_TIMEOUT = 180
 
 if not API_TOKEN or not ADMIN_ID:
     raise ValueError("يجب تعيين BOT_TOKEN و ADMIN_ID في ملف .env")
@@ -156,7 +156,6 @@ async def admin_panel(message: types.Message):
     )
     await message.reply(text, parse_mode="Markdown")
 
-# أوامر الإدارة (بث، حظر، فك حظر) – مختصرة للاختصار
 @dp.message(Command("broadcast"))
 async def broadcast_cmd(message: types.Message):
     if message.from_user.id != ADMIN_ID:
@@ -236,7 +235,6 @@ async def dice_challenge(message: types.Message):
             await message.reply(f"⏳ انتظر `{rem}` ثانية.")
             return
 
-    # منع المشاركة في أكثر من تحدٍ
     for ch_id, ch_data in active_challenges.items():
         if ch_data["p1_id"] == user.id or ch_data.get("p2_id") == user.id:
             await message.reply("⚠️ لديك تحدٍ قائم بالفعل!")
@@ -558,7 +556,7 @@ async def start_dummy_server():
     app.router.add_get("/", handle_ping)
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, SERVER_IP, PORT)  # استخدام SERVER_IP و PORT من المتغيرات
+    site = web.TCPSite(runner, SERVER_IP, PORT)
     await site.start()
     print(f"✅ السيرفر يعمل على {SERVER_IP}:{PORT}")
 
