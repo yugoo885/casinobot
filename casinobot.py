@@ -96,6 +96,12 @@ COOLDOWN_SECONDS = 10
 MIN_BET = 500000
 CHALLENGE_TIMEOUT = 180
 
+# ---------- تنظيف أي تحديات عالقة عند بدء التشغيل (لحل مشكلة التحديات القديمة) ----------
+async def cleanup_stale_challenges():
+    # هذه الدالة ستُستدعى في main لإفراغ أي تحديات متبقية من جلسة سابقة
+    active_challenges.clear()
+    print("🧹 تم تنظيف التحديات العالقة.")
+
 # ---------- الأوامر الأساسية ----------
 @dp.message(Command("start", "help"))
 async def help_cmd(message: types.Message):
@@ -201,7 +207,7 @@ async def unban_cmd(message: types.Message):
         await db.commit()
     await message.reply(f"✅ تم فك الحظر عن `{target}`.")
 
-# ---------- منطق التحدي (المصحح بالكامل) ----------
+# ---------- منطق التحدي (المصحح) ----------
 async def auto_cancel(challenge_id, chat_id, message_id):
     await asyncio.sleep(CHALLENGE_TIMEOUT)
     if challenge_id in active_challenges:
@@ -307,18 +313,18 @@ async def join_challenge(callback: types.CallbackQuery):
     game = active_challenges.get(challenge_id)
 
     # سجل للتصحيح
-    print(f"join_challenge: challenge_id={challenge_id}, game={game}")
+    print(f"join_challenge: user_id={user.id}, challenge_id={challenge_id}, game={game}")
 
     if not game:
         await callback.answer("التحدي غير موجود.", show_alert=True)
         return
 
-    # 1. إذا كان المستخدم هو منشئ التحدي
+    # إذا كان المستخدم هو منشئ التحدي
     if user.id == game["p1_id"]:
         await callback.answer("❌ لا يمكنك الانضمام إلى تحديك الخاص.", show_alert=True)
         return
 
-    # 2. إذا كان هناك لاعب ثانٍ بالفعل
+    # إذا كان هناك لاعب ثانٍ بالفعل
     if game["p2_id"] is not None:
         if game["p2_id"] == user.id:
             await callback.answer("أنت بالفعل في هذا التحدي.", show_alert=True)
@@ -326,13 +332,13 @@ async def join_challenge(callback: types.CallbackQuery):
             await callback.answer("⚠️ التحدي مكتمل بالفعل!", show_alert=True)
         return
 
-    # 3. التأكد من أن المستخدم ليس في تحدٍ آخر
+    # التأكد من أن المستخدم ليس في تحدٍ آخر
     for ch_id, ch_data in active_challenges.items():
         if ch_id != challenge_id and (ch_data["p1_id"] == user.id or ch_data.get("p2_id") == user.id):
             await callback.answer("⚠️ لديك تحدٍ قائم بالفعل!", show_alert=True)
             return
 
-    # 4. كل شيء جيد → تسجيل اللاعب الثاني
+    # كل شيء جيد → تسجيل اللاعب الثاني
     game["p2_id"] = user.id
     game["p2_name"] = user.full_name
     game["p2_username"] = user.username or ""
@@ -606,6 +612,8 @@ async def start_dummy_server():
 
 # ---------- التشغيل ----------
 async def main():
+    # تنظيف التحديات العالقة عند بدء التشغيل
+    await cleanup_stale_challenges()
     print("🟢 DIPCASINO يعمل مع إشعار الأدمن المباشر (نسخة مستقرة)...")
     await start_dummy_server()
     await dp.start_polling(bot)
