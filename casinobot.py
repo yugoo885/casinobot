@@ -89,18 +89,11 @@ async def register_user_if_new(user: types.User):
             """, (user.id, user.username or "", user.full_name))
             await db.commit()
 
-# ---------- التحديات النشطة ----------
 active_challenges = {}
 user_last_cmd_time = {}
 COOLDOWN_SECONDS = 10
 MIN_BET = 500000
 CHALLENGE_TIMEOUT = 180
-
-# ---------- تنظيف أي تحديات عالقة عند بدء التشغيل (لحل مشكلة التحديات القديمة) ----------
-async def cleanup_stale_challenges():
-    # هذه الدالة ستُستدعى في main لإفراغ أي تحديات متبقية من جلسة سابقة
-    active_challenges.clear()
-    print("🧹 تم تنظيف التحديات العالقة.")
 
 # ---------- الأوامر الأساسية ----------
 @dp.message(Command("start", "help"))
@@ -207,7 +200,7 @@ async def unban_cmd(message: types.Message):
         await db.commit()
     await message.reply(f"✅ تم فك الحظر عن `{target}`.")
 
-# ---------- منطق التحدي (المصحح) ----------
+# ---------- منطق التحدي ----------
 async def auto_cancel(challenge_id, chat_id, message_id):
     await asyncio.sleep(CHALLENGE_TIMEOUT)
     if challenge_id in active_challenges:
@@ -236,7 +229,6 @@ async def dice_challenge(message: types.Message):
             await message.reply(f"⏳ انتظر `{rem}` ثانية.")
             return
 
-    # منع وجود تحدٍ نشط لهذا المستخدم (كـ p1 أو p2)
     for ch_id, ch_data in active_challenges.items():
         if ch_data["p1_id"] == user.id or ch_data.get("p2_id") == user.id:
             await message.reply("⚠️ لديك تحدٍ قائم بالفعل!")
@@ -287,7 +279,8 @@ async def dice_challenge(message: types.Message):
     active_challenges[challenge_id]["msg_id"] = sent.message_id
     asyncio.create_task(auto_cancel(challenge_id, message.chat.id, sent.message_id))
 
-@dp.callback_query(F.data.startswith("cancel_"))
+# استخدام lambda بدلاً من F.data.startswith() لتجنب خطأ BaseModel
+@dp.callback_query(lambda c: c.data and c.data.startswith("cancel_"))
 async def cancel_challenge(callback: types.CallbackQuery):
     challenge_id = callback.data.replace("cancel_", "")
     game = active_challenges.get(challenge_id)
@@ -301,7 +294,7 @@ async def cancel_challenge(callback: types.CallbackQuery):
     else:
         await callback.answer("❌ ليس لديك صلاحية.", show_alert=True)
 
-@dp.callback_query(F.data.startswith("join_"))
+@dp.callback_query(lambda c: c.data and c.data.startswith("join_"))
 async def join_challenge(callback: types.CallbackQuery):
     user = callback.from_user
     if await is_user_banned(user.id):
@@ -312,19 +305,14 @@ async def join_challenge(callback: types.CallbackQuery):
     challenge_id = callback.data.replace("join_", "")
     game = active_challenges.get(challenge_id)
 
-    # سجل للتصحيح
-    print(f"join_challenge: user_id={user.id}, challenge_id={challenge_id}, game={game}")
-
     if not game:
         await callback.answer("التحدي غير موجود.", show_alert=True)
         return
 
-    # إذا كان المستخدم هو منشئ التحدي
     if user.id == game["p1_id"]:
         await callback.answer("❌ لا يمكنك الانضمام إلى تحديك الخاص.", show_alert=True)
         return
 
-    # إذا كان هناك لاعب ثانٍ بالفعل
     if game["p2_id"] is not None:
         if game["p2_id"] == user.id:
             await callback.answer("أنت بالفعل في هذا التحدي.", show_alert=True)
@@ -332,18 +320,15 @@ async def join_challenge(callback: types.CallbackQuery):
             await callback.answer("⚠️ التحدي مكتمل بالفعل!", show_alert=True)
         return
 
-    # التأكد من أن المستخدم ليس في تحدٍ آخر
     for ch_id, ch_data in active_challenges.items():
         if ch_id != challenge_id and (ch_data["p1_id"] == user.id or ch_data.get("p2_id") == user.id):
             await callback.answer("⚠️ لديك تحدٍ قائم بالفعل!", show_alert=True)
             return
 
-    # كل شيء جيد → تسجيل اللاعب الثاني
     game["p2_id"] = user.id
     game["p2_name"] = user.full_name
     game["p2_username"] = user.username or ""
 
-    # إنشاء أزرار الأرقام
     buttons = []
     row = []
     for num in range(1, 7):
@@ -353,7 +338,6 @@ async def join_challenge(callback: types.CallbackQuery):
             row = []
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 
-    # تحديث الرسالة لعرض اسم اللاعب الثاني وأزرار الاختيار
     await callback.message.edit_text(
         f"🎮 **اختيار الأرقام:**\n"
         f"━━━━━━━━━━━━━━━━━━━\n"
@@ -365,7 +349,7 @@ async def join_challenge(callback: types.CallbackQuery):
     )
     await callback.answer(f"✅ انضممت إلى التحدي! اختر رقمك.")
 
-@dp.callback_query(F.data.startswith("num_"))
+@dp.callback_query(lambda c: c.data and c.data.startswith("num_"))
 async def select_number(callback: types.CallbackQuery):
     _, challenge_id, num_str = callback.data.split("_")
     num = int(num_str)
@@ -379,7 +363,6 @@ async def select_number(callback: types.CallbackQuery):
         await callback.answer("❌ لست طرفاً في هذا التحدي.", show_alert=True)
         return
 
-    # تحديد اللاعب واختيار الرقم
     if user_id == game["p1_id"]:
         if game["p1_choice"] is not None:
             await callback.answer("⚠️ اخترت مسبقاً!", show_alert=True)
@@ -399,7 +382,6 @@ async def select_number(callback: types.CallbackQuery):
         game["p2_choice"] = num
         await callback.answer(f"✅ اخترت {num}")
 
-    # تحديث واجهة الأرقام بعد كل اختيار
     chosen = [game["p1_choice"], game["p2_choice"]]
     buttons = []
     row = []
@@ -417,7 +399,6 @@ async def select_number(callback: types.CallbackQuery):
     p1_status = f"✅ اختار `{game['p1_choice']}`" if game["p1_choice"] else "لم يختار بعد"
     p2_status = f"✅ اختار `{game['p2_choice']}`" if game["p2_choice"] else "لم يختار بعد"
 
-    # إذا لم يكتمل الاختيار
     if game["p1_choice"] is None or game["p2_choice"] is None:
         await callback.message.edit_text(
             f"🎮 **اختيار الأرقام:**\n"
@@ -430,7 +411,6 @@ async def select_number(callback: types.CallbackQuery):
         )
         return
 
-    # كلاهما اختار → ننتقل للتأكيد
     await callback.message.edit_text(
         f"⏳ **تم اختيار الأرقام!**\n"
         f"━━━━━━━━━━━━━━━━━━━\n"
@@ -443,7 +423,6 @@ async def select_number(callback: types.CallbackQuery):
         parse_mode="Markdown"
     )
 
-    # إرسال رسالة للأدمن
     admin_keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton("✅ تأكيد وبدء اللعبة", callback_data=f"startgame_{challenge_id}")]
     ])
@@ -460,7 +439,7 @@ async def select_number(callback: types.CallbackQuery):
         parse_mode="Markdown"
     )
 
-@dp.callback_query(F.data.startswith("startgame_"))
+@dp.callback_query(lambda c: c.data and c.data.startswith("startgame_"))
 async def start_game_by_admin(callback: types.CallbackQuery):
     if callback.from_user.id != ADMIN_ID:
         await callback.answer("❌ هذا الزر للأدمن فقط.", show_alert=True)
@@ -612,9 +591,9 @@ async def start_dummy_server():
 
 # ---------- التشغيل ----------
 async def main():
-    # تنظيف التحديات العالقة عند بدء التشغيل
-    await cleanup_stale_challenges()
-    print("🟢 DIPCASINO يعمل مع إشعار الأدمن المباشر (نسخة مستقرة)...")
+    print("🟢 DIPCASINO يعمل مع إشعار الأدمن المباشر...")
+    # مسح أي webhook قديم لتجنب تعارض البوتات
+    await bot.delete_webhook(drop_pending_updates=True)
     await start_dummy_server()
     await dp.start_polling(bot)
 
