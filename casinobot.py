@@ -13,19 +13,19 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ---------- المتغيرات من البيئة ----------
+# ---------- المتغيرات ----------
 API_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
 ADMIN_HANDLE = os.getenv("ADMIN_HANDLE", "@YUGO_DZ")
 PORT = int(os.getenv("PORT", 10000))
 
 if not API_TOKEN or not ADMIN_ID:
-    raise ValueError("BOT_TOKEN و ADMIN_ID مطلوبان في متغيرات البيئة")
+    raise ValueError("BOT_TOKEN و ADMIN_ID مطلوبان")
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
-# ---------- قاعدة البيانات غير المتزامنة ----------
+# ---------- قاعدة البيانات ----------
 DB_PATH = "casino_stats.db"
 
 @asynccontextmanager
@@ -97,7 +97,7 @@ COOLDOWN_SECONDS = 10
 MIN_BET = 500000
 CHALLENGE_TIMEOUT = 180
 
-# ---------- الأوامر ----------
+# ---------- الأوامر الأساسية ----------
 @dp.message(Command("start", "help"))
 async def help_cmd(message: types.Message):
     if await is_user_banned(message.from_user.id):
@@ -202,7 +202,7 @@ async def unban_cmd(message: types.Message):
         await db.commit()
     await message.reply(f"✅ تم فك الحظر عن `{target}`.")
 
-# ---------- منطق التحدي (مختصر) ----------
+# ---------- منطق التحدي ----------
 async def auto_cancel(challenge_id, chat_id, message_id):
     await asyncio.sleep(CHALLENGE_TIMEOUT)
     if challenge_id in active_challenges:
@@ -231,6 +231,7 @@ async def dice_challenge(message: types.Message):
             await message.reply(f"⏳ انتظر `{rem}` ثانية.")
             return
 
+    # التحقق من وجود تحدٍ نشط لهذا المستخدم (كـ p1 أو p2)
     for ch_id, ch_data in active_challenges.items():
         if ch_data["p1_id"] == user.id or ch_data.get("p2_id") == user.id:
             await message.reply("⚠️ لديك تحدٍ قائم بالفعل!")
@@ -247,6 +248,7 @@ async def dice_challenge(message: types.Message):
 
     user_last_cmd_time[user.id] = now
     challenge_id = f"{message.chat.id}_{message.message_id}"
+
     active_challenges[challenge_id] = {
         "p1_id": user.id,
         "p1_name": user.full_name,
@@ -287,6 +289,7 @@ async def cancel_challenge(callback: types.CallbackQuery):
     if not game:
         await callback.answer("التحدي منتهي.", show_alert=True)
         return
+    # يسمح بالإلغاء لمنشئ التحدي أو الأدمن
     if callback.from_user.id == game["p1_id"] or callback.from_user.id == ADMIN_ID:
         del active_challenges[challenge_id]
         await callback.message.edit_text("🚫 تم إلغاء التحدي.")
@@ -307,22 +310,28 @@ async def join_challenge(callback: types.CallbackQuery):
     if not game:
         await callback.answer("التحدي غير موجود.", show_alert=True)
         return
+
+    # التحقق من أن التحدي لم يكتمل (لا يوجد لاعب ثانٍ)
     if game["p2_id"] is not None:
         await callback.answer("⚠️ التحدي مكتمل بالفعل!", show_alert=True)
         return
+
     if user.id == game["p1_id"]:
-        await callback.answer("❌ لا يمكنك التحدي ضد نفسك.", show_alert=True)
+        await callback.answer("❌ لا يمكنك الانضمام إلى تحديك الخاص.", show_alert=True)
         return
 
+    # منع المستخدم من الانضمام إذا كان في تحدٍ آخر (كـ p1 أو p2)
     for ch_id, ch_data in active_challenges.items():
         if ch_id != challenge_id and (ch_data["p1_id"] == user.id or ch_data.get("p2_id") == user.id):
             await callback.answer("⚠️ لديك تحدٍ قائم بالفعل!", show_alert=True)
             return
 
+    # تسجيل اللاعب الثاني
     game["p2_id"] = user.id
     game["p2_name"] = user.full_name
     game["p2_username"] = user.username or ""
 
+    # إنشاء أزرار الأرقام
     buttons = []
     row = []
     for num in range(1, 7):
@@ -332,6 +341,7 @@ async def join_challenge(callback: types.CallbackQuery):
             row = []
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 
+    # تحديث الرسالة لعرض واجهة اختيار الأرقام
     await callback.message.edit_text(
         f"🎮 **اختيار الأرقام:**\n"
         f"━━━━━━━━━━━━━━━━━━━\n"
@@ -357,6 +367,7 @@ async def select_number(callback: types.CallbackQuery):
         await callback.answer("❌ لست طرفاً في هذا التحدي.", show_alert=True)
         return
 
+    # تحديد اللاعب واختيار الرقم
     if user_id == game["p1_id"]:
         if game["p1_choice"] is not None:
             await callback.answer("⚠️ اخترت مسبقاً!", show_alert=True)
@@ -376,7 +387,12 @@ async def select_number(callback: types.CallbackQuery):
         game["p2_choice"] = num
         await callback.answer(f"✅ اخترت {num}")
 
+    # بعد كل اختيار، نقوم بتحديث الرسالة لإظهار من اختار وماذا
+    # نعرض واجهة الأرقام مع تعطيل الأزرار التي تم اختيارها (عن طريق إزالتها)
+    # لكن الأسهل: نعيد عرض الرسالة مع تحديث النص
+    # إذا لم يكتمل الاختيار، نعرض نفس الأزرار مع إظهار من اختار
     if game["p1_choice"] is not None and game["p2_choice"] is not None:
+        # كلاهما اختار → ننتقل لمرحلة التأكيد
         await callback.message.edit_text(
             f"⏳ **تم اختيار الأرقام!**\n"
             f"━━━━━━━━━━━━━━━━━━━\n"
@@ -388,7 +404,7 @@ async def select_number(callback: types.CallbackQuery):
             f"سيتم بدء اللعبة فور تأكيده.",
             parse_mode="Markdown"
         )
-
+        # إرسال رسالة للأدمن
         admin_keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton("✅ تأكيد وبدء اللعبة", callback_data=f"startgame_{challenge_id}")]
         ])
@@ -404,6 +420,41 @@ async def select_number(callback: types.CallbackQuery):
             reply_markup=admin_keyboard,
             parse_mode="Markdown"
         )
+    else:
+        # لم يكتمل الاختيار بعد: نعرض حالة كل لاعب مع أزرار الأرقام المتبقية
+        # نبني أزرار الأرقام مع تعطيل الأرقام المختارة (نعرضها لكن نغير لونها أو نزيلها)
+        # لكن الأسهل: نعرض نفس الأزرار مع تحديث النص
+        # نعيد عرض الأزرار مع تحديث النص
+        buttons = []
+        row = []
+        # قائمة الأرقام المتاحة (غير المختارة)
+        chosen = [game["p1_choice"], game["p2_choice"]]
+        for num in range(1, 7):
+            if num in chosen:
+                # نعرض الرقم لكن بدون زر (أو نعرضه كنص)
+                # ولكن نفضل إزالته من الأزرار
+                continue
+            row.append(InlineKeyboardButton(str(num), callback_data=f"num_{challenge_id}_{num}"))
+            if len(row) == 3:
+                buttons.append(row)
+                row = []
+        if row:
+            buttons.append(row)
+        # إذا لم يتبق أزرار (كل الأرقام مختارة) لكن هذا لا يحدث لأننا نمنع التكرار
+        keyboard = InlineKeyboardMarkup(inline_keyboard=buttons) if buttons else None
+
+        # نص الحالة
+        p1_status = f"✅ اختار `{game['p1_choice']}`" if game["p1_choice"] else "لم يختار بعد"
+        p2_status = f"✅ اختار `{game['p2_choice']}`" if game["p2_choice"] else "لم يختار بعد"
+        await callback.message.edit_text(
+            f"🎮 **اختيار الأرقام:**\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"👤 **{game['p1_name']}:** {p1_status}\n"
+            f"👤 **{game['p2_name']}:** {p2_status}\n\n"
+            f"🎯 اختر رقماً مختلفاً عن الخصم!",
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
 
 @dp.callback_query(F.data.startswith("startgame_"))
 async def start_game_by_admin(callback: types.CallbackQuery):
@@ -416,7 +467,9 @@ async def start_game_by_admin(callback: types.CallbackQuery):
         await callback.answer("⚠️ التحدي غير موجود.", show_alert=True)
         return
     await callback.answer("✅ تم التأكيد! جارٍ الرمي...")
+    # نبدأ اللعبة
     await start_dice_roll(callback.message, challenge_id)
+    # نحذف رسالة الأدمن الخاصة
     await callback.message.delete()
 
 async def start_dice_roll(msg: types.Message, challenge_id: str, attempt: int = 1):
@@ -452,6 +505,7 @@ async def start_dice_roll(msg: types.Message, challenge_id: str, attempt: int = 
     dice = await bot.send_dice(chat_id=chat_id, emoji="🎲")
     actual_val = dice.dice.value
 
+    # إذا فشل التطابق بعد المحاولة الثانية، نختار عشوائياً من الرقمين المختارين
     if attempt >= 2 and actual_val not in (c1, c2):
         actual_val = random.choice([c1, c2])
 
