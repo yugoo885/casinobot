@@ -1,14 +1,16 @@
 import asyncio
+import os
 import random
 import sqlite3
 import sys
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
+from aiohttp import web
 
-# ضبط الترميز لطباعة اللغة العربية بوضوح في موجه الأوامر
+# ضبط الترميز لطباعة اللغة العربية
 sys.stdout.reconfigure(encoding='utf-8')
 
-# --- الإعدادات الأساسية المحدثة ---
+# --- الإعدادات الأساسية ---
 API_TOKEN = "8987676069:AAHAKyeUghOdsfJZWBnO7CflLr-u9ovzXrY"
 ADMIN_HANDLE = "@YUGO_DZ"
 MIN_BET = 500000
@@ -232,9 +234,25 @@ async def top_cmd(message: types.Message):
   await message.reply(text)
 
 
-# --- تشغيل البوت ---
+# --- سيرفر وهمي للحفاظ على تشغيل Render Web Service ---
+async def handle_ping(request):
+  return web.Response(text="Bot is Alive!")
+
+
+async def start_dummy_server():
+  app = web.Application()
+  app.router.add_get("/", handle_ping)
+  runner = web.AppRunner(app)
+  await runner.setup()
+  port = int(os.environ.get("PORT", 10000))
+  site = web.TCPSite(runner, "0.0.0.0", port)
+  await site.start()
+
+
+# --- تشغيل البوت والسيرفر معاً ---
 async def main():
-  print("🟢 البوت يعمل الآن بنجاح...")
+  print("🟢 البوت يعمل الآن بنجاح على Render Web Service...")
+  await start_dummy_server()
   await dp.start_polling(bot)
 
 
